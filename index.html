@@ -158,7 +158,7 @@
   <div class="notes-grid" id="notesGrid"></div>
 
   <script>
-    const GAS_URL = 'https://script.google.com/macros/s/AKfycbyvoly98_umtjOkYQXHYaGocYfUVuAX4EJ5bBW5lc44S255MRuhORrEz96fZhws8I6k/exec';
+    const GAS_URL = 'https://script.google.com/macros/s/AKfycbwNCe30R0QZE0cCdrbYBDsGWc2K-BD9VWzy_SDirUd2OKP7FiV2xkbM0k8EJ2jsfQJF/exec';
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js');
@@ -234,10 +234,9 @@
         const data = await res.json();
 
         if (Array.isArray(data) && data.length > 0) {
-          notes = data.map((item, idx) => {
+          notes = data.map((item) => {
             const rawText = item.memo || '';
             
-            // 시트 포맷 파싱 ([제목], [태그], [내용])
             let title = '';
             let tags = [];
             let content = rawText;
@@ -256,7 +255,7 @@
             }
 
             return {
-              id: Date.now() + idx,
+              id: item.id || Date.now(),
               title: title,
               content: content,
               tags: tags,
@@ -294,7 +293,11 @@
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ memo: memoString })
+          body: JSON.stringify({
+            action: 'add',
+            id: notePayload.id,
+            memo: memoString
+          })
         });
         syncStatus.textContent = '✅ 시트 저장 완료';
         setTimeout(() => syncStatus.textContent = '', 3000);
@@ -304,33 +307,39 @@
       }
     }
 
-    // 메모 추가
-    addNoteBtn.addEventListener('click', () => {
-      const title = noteTitle.value.trim();
-      const content = noteContent.value.trim();
+    // 🗑️ 구글 시트 메모 삭제
+    async function deleteFromGoogleSheet(id) {
+      if (!GAS_URL) return;
 
-      if (!title && !content) return alert('제목이나 내용을 입력해주세요.');
+      syncStatus.textContent = '🗑️ 시트에서 삭제 중...';
 
-      const newNote = {
-        id: Date.now(),
-        title,
-        content,
-        tags: [...selectedTags],
-        color: selectedColor,
-        pinned: false,
-        createdAt: new Date().toLocaleDateString()
-      };
+      try {
+        await fetch(GAS_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'delete',
+            id: id
+          })
+        });
+        syncStatus.textContent = '✅ 시트 삭제 완료';
+        setTimeout(() => syncStatus.textContent = '', 3000);
+      } catch (err) {
+        console.error('GAS Delete Error:', err);
+        syncStatus.textContent = '⚠️ 시트 삭제 실패';
+      }
+    }
 
-      notes.unshift(newNote);
+    // 메모 삭제
+    function deleteNote(id) {
+      if (!confirm('정말 이 메모를 삭제하시겠습니까?')) return;
+
+      notes = notes.filter(n => n.id !== id);
       saveAndRender();
-      
-      syncToGoogleSheet(newNote);
 
-      noteTitle.value = '';
-      noteContent.value = '';
-      selectedTags = [];
-      document.querySelectorAll('.tag-chip').forEach(chip => chip.classList.remove('selected'));
-    });
+      deleteFromGoogleSheet(id);
+    }
 
     function saveAndRender() {
       localStorage.setItem('pwa_notes', JSON.stringify(notes));
@@ -371,11 +380,6 @@
       saveAndRender();
     }
 
-    function deleteNote(id) {
-      notes = notes.filter(n => n.id !== id);
-      saveAndRender();
-    }
-
     function renderNotes() {
       const query = searchInput.value.toLowerCase();
       const filtered = notes
@@ -410,7 +414,6 @@
 
     searchInput.addEventListener('input', renderNotes);
 
-    // 초기 화면 로딩: 로컬 렌더링 후 구글 시트에서 최신 메모 불러오기
     renderNotes();
     loadFromGoogleSheet();
   </script>
