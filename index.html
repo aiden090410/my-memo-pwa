@@ -70,7 +70,6 @@
     /* Notes Grid */
     .notes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.25rem; }
     
-    /* 🌟 다크 모드에서도 메모 카드 글씨가 항상 선명한 검은색으로 나타나도록 설정 */
     .note-card { 
       background: var(--card-bg, var(--bg-card)); 
       color: #0f172a !important; 
@@ -159,7 +158,7 @@
   <div class="notes-grid" id="notesGrid"></div>
 
   <script>
-    const GAS_URL = 'https://script.google.com/macros/s/AKfycbxkhs6Tz5mth3yXhM-tZFEt5XwmK5NCe2-GQ3kl53BHQXAcQ59xbTX6DRUumKBfYsYV/exec';
+    const GAS_URL = 'https://script.google.com/macros/s/AKfycbyvoly98_umtjOkYQXHYaGocYfUVuAX4EJ5bBW5lc44S255MRuhORrEz96fZhws8I6k/exec';
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js');
@@ -191,7 +190,7 @@
       themeToggle.textContent = newTheme === 'dark' ? '☀️ 라이트 모드' : '🌙 다크 모드';
     });
 
-    // 버튼으로 체크박스 토글 문자열([ ]) 간편 입력
+    // 체크박스([ ]) 간편 입력
     addTodoBtn.addEventListener('click', () => {
       const cursor = noteContent.selectionStart;
       const val = noteContent.value;
@@ -201,7 +200,7 @@
       noteContent.focus();
     });
 
-    // 태그 버튼 다중 선택 기능
+    // 태그 버튼 선택
     document.getElementById('tagSelector').addEventListener('click', (e) => {
       if (e.target.classList.contains('tag-chip')) {
         const tag = e.target.dataset.tag;
@@ -224,7 +223,63 @@
       }
     });
 
-    // 구글 시트로 메모 전송
+    // 🌐 구글 스프레드시트 전체 데이터 불러오기
+    async function loadFromGoogleSheet() {
+      if (!GAS_URL) return;
+
+      syncStatus.textContent = '🔄 시트 메모 불러오는 중...';
+
+      try {
+        const res = await fetch(GAS_URL);
+        const data = await res.json();
+
+        if (Array.isArray(data) && data.length > 0) {
+          notes = data.map((item, idx) => {
+            const rawText = item.memo || '';
+            
+            // 시트 포맷 파싱 ([제목], [태그], [내용])
+            let title = '';
+            let tags = [];
+            let content = rawText;
+
+            const titleMatch = rawText.match(/\[제목\]\s*(.*?)(?=\n|$)/);
+            if (titleMatch) title = titleMatch[1].trim();
+
+            const tagMatch = rawText.match(/\[태그\]\s*(.*?)(?=\n|$)/);
+            if (tagMatch && tagMatch[1]) {
+              tags = tagMatch[1].split(',').map(t => t.trim()).filter(Boolean);
+            }
+
+            const contentMatch = rawText.match(/\[내용\]\n([\s\S]*)/);
+            if (contentMatch) {
+              content = contentMatch[1];
+            }
+
+            return {
+              id: Date.now() + idx,
+              title: title,
+              content: content,
+              tags: tags,
+              color: 'default',
+              pinned: false,
+              createdAt: item.time || ''
+            };
+          });
+
+          saveAndRender();
+          syncStatus.textContent = '✅ 동기화 완료';
+        } else {
+          syncStatus.textContent = '';
+        }
+      } catch (err) {
+        console.error('GAS Load Error:', err);
+        syncStatus.textContent = '⚠️ 시트 동기화 실패 (로컬 데이터 표시)';
+      } finally {
+        setTimeout(() => syncStatus.textContent = '', 3000);
+      }
+    }
+
+    // 구글 시트로 메모 저장 (POST)
     async function syncToGoogleSheet(notePayload) {
       if (!GAS_URL) return;
 
@@ -271,7 +326,6 @@
       
       syncToGoogleSheet(newNote);
 
-      // 폼 초기화
       noteTitle.value = '';
       noteContent.value = '';
       selectedTags = [];
@@ -355,7 +409,10 @@
     }
 
     searchInput.addEventListener('input', renderNotes);
+
+    // 초기 화면 로딩: 로컬 렌더링 후 구글 시트에서 최신 메모 불러오기
     renderNotes();
+    loadFromGoogleSheet();
   </script>
 </body>
 </html>
