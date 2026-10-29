@@ -223,7 +223,7 @@
       }
     });
 
-    // 🌐 구글 스프레드시트 전체 데이터 불러오기 (예외 처리 강화)
+    // 🌐 구글 스프레드시트 전체 데이터 불러오기
     async function loadFromGoogleSheet() {
       if (!GAS_URL) return;
 
@@ -233,48 +233,47 @@
         const res = await fetch(GAS_URL);
         const data = await res.json();
 
-        if (Array.isArray(data) && data.length > 0) {
-          notes = data.map((item, idx) => {
-            const rawText = String(item.memo || '');
-            
-            let title = '';
-            let tags = [];
-            let content = rawText;
+        if (Array.isArray(data)) {
+          if (data.length === 0) {
+            // 시트가 완전히 비어있으면 로컬 화면 데이터도 함께 초기화
+            notes = [];
+          } else {
+            notes = data.map((item, idx) => {
+              const rawText = String(item.memo || '');
+              
+              let title = '';
+              let tags = [];
+              let content = rawText;
 
-            // [제목] 패턴 추출
-            const titleMatch = rawText.match(/\[제목\]\s*(.*?)(?=\n|$)/);
-            if (titleMatch) title = titleMatch[1].trim();
+              const titleMatch = rawText.match(/\[제목\]\s*(.*?)(?=\n|$)/);
+              if (titleMatch) title = titleMatch[1].trim();
 
-            // [태그] 패턴 추출
-            const tagMatch = rawText.match(/\[태그\]\s*(.*?)(?=\n|$)/);
-            if (tagMatch && tagMatch[1]) {
-              tags = tagMatch[1].split(',').map(t => t.trim()).filter(Boolean);
-            }
+              const tagMatch = rawText.match(/\[태그\]\s*(.*?)(?=\n|$)/);
+              if (tagMatch && tagMatch[1]) {
+                tags = tagMatch[1].split(',').map(t => t.trim()).filter(Boolean);
+              }
 
-            // [내용] 패턴 추출
-            const contentMatch = rawText.match(/\[내용\]\n([\s\S]*)/);
-            if (contentMatch) {
-              content = contentMatch[1];
-            } else if (titleMatch) {
-              // [내용] 태그가 없더라도 [제목] 구문 제거 후 본문으로 사용
-              content = rawText.replace(/\[제목\]\s*.*?\n?/, '').replace(/\[태그\]\s*.*?\n?/, '').trim();
-            }
+              const contentMatch = rawText.match(/\[내용\]\n([\s\S]*)/);
+              if (contentMatch) {
+                content = contentMatch[1];
+              } else if (titleMatch) {
+                content = rawText.replace(/\[제목\]\s*.*?\n?/, '').replace(/\[태그\]\s*.*?\n?/, '').trim();
+              }
 
-            return {
-              id: item.id || (Date.now() + idx),
-              title: title || '메모',
-              content: content || rawText,
-              tags: tags,
-              color: 'default',
-              pinned: false,
-              createdAt: item.time || ''
-            };
-          });
+              return {
+                id: String(item.id || (Date.now() + idx)),
+                title: title || '제목 없음',
+                content: content || rawText,
+                tags: tags,
+                color: 'default',
+                pinned: false,
+                createdAt: item.time || ''
+              };
+            });
+          }
 
           saveAndRender();
           syncStatus.textContent = '✅ 동기화 완료';
-        } else {
-          syncStatus.textContent = '';
         }
       } catch (err) {
         console.error('GAS Load Error:', err);
@@ -301,7 +300,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: 'add',
-            id: notePayload.id,
+            id: String(notePayload.id),
             memo: memoString
           })
         });
@@ -309,7 +308,7 @@
         setTimeout(() => syncStatus.textContent = '', 3000);
       } catch (err) {
         console.error('GAS Sync Error:', err);
-        syncStatus.textContent = '⚠️ 시트 저장 실패 (로컬엔 저장됨)';
+        syncStatus.textContent = '⚠️ 시트 저장 실패';
       }
     }
 
@@ -326,7 +325,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: 'delete',
-            id: id
+            id: String(id)
           })
         });
         syncStatus.textContent = '✅ 시트 삭제 완료';
@@ -337,15 +336,41 @@
       }
     }
 
-    // 메모 삭제
+    // 메모 삭제 (문자열/숫자 ID 타입 불일치 방지)
     function deleteNote(id) {
-      if (!confirm('정말 이 메모를 삭제하시겠습니까?')) return;
-
-      notes = notes.filter(n => n.id !== id);
+      notes = notes.filter(n => String(n.id) !== String(id));
       saveAndRender();
 
       deleteFromGoogleSheet(id);
     }
+
+    // 메모 추가
+    addNoteBtn.addEventListener('click', () => {
+      const title = noteTitle.value.trim();
+      const content = noteContent.value.trim();
+
+      if (!title && !content) return alert('제목이나 내용을 입력해주세요.');
+
+      const newNote = {
+        id: String(Date.now()),
+        title,
+        content,
+        tags: [...selectedTags],
+        color: selectedColor,
+        pinned: false,
+        createdAt: new Date().toLocaleDateString()
+      };
+
+      notes.unshift(newNote);
+      saveAndRender();
+      
+      syncToGoogleSheet(newNote);
+
+      noteTitle.value = '';
+      noteContent.value = '';
+      selectedTags = [];
+      document.querySelectorAll('.tag-chip').forEach(chip => chip.classList.remove('selected'));
+    });
 
     function saveAndRender() {
       localStorage.setItem('pwa_notes', JSON.stringify(notes));
@@ -359,7 +384,7 @@
           const isChecked = line.startsWith('[x] ');
           const text = line.replace(/^\[[ x]\]\s*/, '');
           return `<div class="todo-item ${isChecked ? 'done' : ''}">
-                    <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleTodo(${noteId}, ${idx})">
+                    <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleTodo('${noteId}', ${idx})">
                     <span>${text}</span>
                   </div>`;
         }
@@ -368,7 +393,7 @@
     }
 
     function toggleTodo(noteId, lineIndex) {
-      const note = notes.find(n => n.id === noteId);
+      const note = notes.find(n => String(n.id) === String(noteId));
       if (note) {
         const lines = note.content.split('\n');
         if (lines[lineIndex].startsWith('[ ] ')) {
@@ -382,7 +407,7 @@
     }
 
     function togglePin(id) {
-      notes = notes.map(n => n.id === id ? { ...n, pinned: !n.pinned } : n);
+      notes = notes.map(n => String(n.id) === String(id) ? { ...n, pinned: !n.pinned } : n);
       saveAndRender();
     }
 
@@ -403,7 +428,7 @@
             <div>
               <div class="note-header">
                 <div class="note-title">${note.title || '제목 없음'}</div>
-                <button class="pin-btn ${note.pinned ? 'active' : ''}" onclick="togglePin(${note.id})">📌</button>
+                <button class="pin-btn ${note.pinned ? 'active' : ''}" onclick="togglePin('${note.id}')">📌</button>
               </div>
               <div class="note-body">${parseContentWithCheckboxes(note.id, note.content)}</div>
             </div>
@@ -411,7 +436,7 @@
               <div class="tags-container">
                 ${note.tags.map(tag => `<span class="tag-badge">${tag.startsWith('#') ? tag : '#' + tag}</span>`).join('')}
               </div>
-              <button class="delete-btn" onclick="deleteNote(${note.id})">삭제</button>
+              <button class="delete-btn" onclick="deleteNote('${note.id}')">삭제</button>
             </div>
           </div>
         `;
