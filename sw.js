@@ -1,4 +1,4 @@
-const CACHE_NAME = 'memo-pwa-v3';
+const CACHE_NAME = 'memo-pwa-v4';
 const ASSETS = [
   './',
   './index.html',
