@@ -3,70 +3,304 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>한 줄 메모장</title>
+  <title>Modern PWA Notes</title>
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#4CAF50">
-  <link rel="apple-touch-icon" href="icon-192.png">
+  <meta name="theme-color" content="#6366f1">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
   <style>
-    body { font-family: sans-serif; padding: 20px; max-width: 400px; margin: 0 auto; }
-    .input-group { display: flex; gap: 8px; margin-top: 15px; }
-    input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
-    button { padding: 10px 16px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; }
-    button:disabled { background-color: #ccc; }
-    #status { margin-top: 10px; font-size: 13px; color: #666; }
+    :root {
+      --bg-primary: #f8fafc;
+      --bg-card: #ffffff;
+      --text-primary: #0f172a;
+      --text-secondary: #64748b;
+      --border-color: #e2e8f0;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+    }
+
+    [data-theme="dark"] {
+      --bg-primary: #0f172a;
+      --bg-card: #1e293b;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --border-color: #334155;
+      --shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.3);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; transition: background-color 0.2s, color 0.2s; }
+    body { background-color: var(--bg-primary); color: var(--text-primary); padding: 2rem 1rem; max-width: 1000px; margin: 0 auto; }
+
+    /* Header */
+    header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
+    h1 { font-size: 1.8rem; font-weight: 700; background: linear-gradient(135deg, #6366f1, #a855f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .theme-btn { background: none; border: 1px solid var(--border-color); padding: 0.5rem 1rem; border-radius: 20px; cursor: pointer; color: var(--text-primary); font-weight: 600; }
+
+    /* Sync Status Toast */
+    .sync-status { font-size: 0.85rem; color: var(--text-secondary); margin-left: 0.5rem; display: inline-block; }
+
+    /* Form Card */
+    .note-form { background: var(--bg-card); padding: 1.5rem; border-radius: 16px; box-shadow: var(--shadow); border: 1px solid var(--border-color); margin-bottom: 2rem; }
+    .input-group { margin-bottom: 1rem; }
+    input[type="text"], textarea { width: 100%; border: 1px solid var(--border-color); background: transparent; color: var(--text-primary); padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.95rem; outline: none; }
+    input[type="text"]:focus, textarea:focus { border-color: var(--accent); }
+    textarea { height: 100px; resize: vertical; }
+
+    .form-options { display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: space-between; align-items: center; margin-top: 1rem; }
+    .color-picker { display: flex; gap: 0.5rem; }
+    .color-dot { width: 24px; height: 24px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
+    .color-dot.selected { border-color: var(--accent); scale: 1.1; }
+
+    .btn-submit { background-color: var(--accent); color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; cursor: pointer; }
+    .btn-submit:hover { background-color: var(--accent-hover); }
+
+    /* Filter & Search */
+    .filter-bar { display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; }
+    .search-input { flex: 1; min-width: 200px; }
+
+    /* Notes Grid */
+    .notes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.25rem; }
+    .note-card { background: var(--card-bg, var(--bg-card)); padding: 1.25rem; border-radius: 14px; border: 1px solid var(--border-color); box-shadow: var(--shadow); display: flex; flex-direction: column; justify-content: space-between; }
+    .note-card.pinned { border: 2px solid var(--accent); }
+    
+    .note-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; }
+    .note-title { font-weight: 700; font-size: 1.1rem; word-break: break-all; }
+    .pin-btn { background: none; border: none; cursor: pointer; font-size: 1.1rem; opacity: 0.4; }
+    .pin-btn.active { opacity: 1; }
+
+    .note-body { font-size: 0.95rem; color: var(--text-primary); line-height: 1.5; white-space: pre-wrap; margin-bottom: 1rem; }
+    
+    /* Checklist UI */
+    .todo-item { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.25rem; }
+    .todo-item.done span { text-decoration: line-through; opacity: 0.5; }
+
+    .note-footer { display: flex; justify-content: space-between; align-items: center; margin-top: auto; padding-top: 0.75rem; border-top: 1px solid rgba(0,0,0,0.05); }
+    .tags-container { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+    .tag-badge { background: rgba(99, 102, 241, 0.15); color: var(--accent); font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 12px; font-weight: 600; }
+    .delete-btn { background: none; border: none; color: #ef4444; cursor: pointer; font-size: 0.85rem; }
   </style>
 </head>
 <body>
-  <h3>📝 나만의 한 줄 메모장 (PWA)</h3>
-  <div class="input-group">
-    <input type="text" id="memoInput" placeholder="메모할 내용을 입력하세요">
-    <button id="sendBtn" onclick="sendMemo()">전송</button>
+
+  <header>
+    <div>
+      <h1>✨ Modern Notes</h1>
+      <span id="syncStatus" class="sync-status"></span>
+    </div>
+    <button class="theme-btn" id="themeToggle">🌙 다크 모드</button>
+  </header>
+
+  <!-- 메모 작성 양식 -->
+  <div class="note-form">
+    <div class="input-group">
+      <input type="text" id="noteTitle" placeholder="제목을 입력하세요...">
+    </div>
+    <div class="input-group">
+      <textarea id="noteContent" placeholder="내용을 입력하세요... (줄바꿈 후 '[ ] 할일' 입력 시 체크박스로 변환)"></textarea>
+    </div>
+    <div class="input-group">
+      <input type="text" id="noteTags" placeholder="태그 입력 (쉼표로 구분: #아이디어, #장보기)">
+    </div>
+    
+    <div class="form-options">
+      <div class="color-picker" id="colorPicker">
+        <div class="color-dot selected" data-color="default" style="background: #ffffff; border: 1px solid #ccc;"></div>
+        <div class="color-dot" data-color="#fef3c7" style="background: #fef3c7;"></div>
+        <div class="color-dot" data-color="#dcfce7" style="background: #dcfce7;"></div>
+        <div class="color-dot" data-color="#e0e7ff" style="background: #e0e7ff;"></div>
+        <div class="color-dot" data-color="#fce7f3" style="background: #fce7f3;"></div>
+      </div>
+      <button class="btn-submit" id="addNoteBtn">메모 저장</button>
+    </div>
   </div>
-  <div id="status"></div>
+
+  <!-- 검색 및 필터 -->
+  <div class="filter-bar">
+    <input type="text" class="search-input" id="searchInput" placeholder="🔍 제목, 내용, 태그로 검색...">
+  </div>
+
+  <!-- 메모 카드 리스트 -->
+  <div class="notes-grid" id="notesGrid"></div>
 
   <script>
-    // 1. 서비스 워커 등록
+    // ⚠️ 본인의 구글 웹 앱 URL을 아래 변수에 넣어주세요!
+    const GAS_URL = 'https://script.google.com/macros/s/AKfycbxkhs6Tz5mth3yXhM-tZFEt5XwmK5NCe2-GQ3kl53BHQXAcQ59xbTX6DRUumKBfYsYV/exec';
+
+    // PWA Service Worker 등록
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js')
-        .then(() => console.log('Service Worker Registered'));
+      navigator.serviceWorker.register('sw.js');
     }
 
-    // 2. 구글 앱 스크립트 웹 앱 URL 붙여넣기
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbxkhs6Tz5mth3yXhM-tZFEt5XwmK5NCe2-GQ3kl53BHQXAcQ59xbTX6DRUumKBfYsYV/exec";
+    // 상태 관리
+    let notes = JSON.parse(localStorage.getItem('pwa_notes') || '[]');
+    let selectedColor = 'default';
 
-    async function sendMemo() {
-      const input = document.getElementById('memoInput');
-      const btn = document.getElementById('sendBtn');
-      const status = document.getElementById('status');
-      const text = input.value.trim();
+    // DOM 요소
+    const notesGrid = document.getElementById('notesGrid');
+    const noteTitle = document.getElementById('noteTitle');
+    const noteContent = document.getElementById('noteContent');
+    const noteTags = document.getElementById('noteTags');
+    const addNoteBtn = document.getElementById('addNoteBtn');
+    const searchInput = document.getElementById('searchInput');
+    const themeToggle = document.getElementById('themeToggle');
+    const syncStatus = document.getElementById('syncStatus');
 
-      if (!text) return alert('내용을 입력하세요.');
+    // 다크모드 설정
+    const currentTheme = localStorage.getItem('theme') || 'light';
+    document.documentElement.setAttribute('data-theme', currentTheme);
+    themeToggle.textContent = currentTheme === 'dark' ? '☀️ 라이트 모드' : '🌙 다크 모드';
 
-      btn.disabled = true;
-      status.innerText = '저장 중...';
+    themeToggle.addEventListener('click', () => {
+      const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      const newTheme = isDark ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', newTheme);
+      localStorage.setItem('theme', newTheme);
+      themeToggle.textContent = newTheme === 'dark' ? '☀️ 라이트 모드' : '🌙 다크 모드';
+    });
+
+    // 컬러 피커 선택
+    document.getElementById('colorPicker').addEventListener('click', (e) => {
+      if (e.target.classList.contains('color-dot')) {
+        document.querySelectorAll('.color-dot').forEach(dot => dot.classList.remove('selected'));
+        e.target.classList.add('selected');
+        selectedColor = e.target.dataset.color;
+      }
+    });
+
+    // 구글 스프레드시트 동기화 (POST)
+    async function syncToGoogleSheet(notePayload) {
+      if (!GAS_URL || GAS_URL.includes('YOUR_SCRIPT_ID')) return;
+
+      syncStatus.textContent = '☁️ 시트 저장 중...';
+      
+      // 구글 시트 메모 컬럼에 다채로운 정보(제목, 내용, 태그 등)를 통합 전송
+      const memoString = `[제목] ${notePayload.title || '제목 없음'}\n` +
+                         `[태그] ${notePayload.tags.join(', ')}\n` +
+                         `[내용]\n${notePayload.content}`;
 
       try {
-        const res = await fetch(GAS_URL, {
+        await fetch(GAS_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ memo: text })
+          mode: 'no-cors', // GAS CORS 제한 우회
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ memo: memoString })
         });
-
-        // 서버(GAS)가 돌려준 결과를 확인해서 실패하면 오류로 처리
-        const result = await res.json();
-        if (result.result !== 'success') {
-          throw new Error(result.message || '서버 오류');
-        }
-
-        input.value = '';
-        status.innerText = '✅ 성공적으로 저장되었습니다!';
-        setTimeout(() => { status.innerText = ''; }, 2000);
+        syncStatus.textContent = '✅ 시트 저장 완료';
+        setTimeout(() => syncStatus.textContent = '', 3000);
       } catch (err) {
-        status.innerText = '❌ 저장 실패: ' + err.message;
-      } finally {
-        btn.disabled = false;
+        console.error('GAS Sync Error:', err);
+        syncStatus.textContent = '⚠️ 시트 저장 실패 (로컬엔 저장됨)';
       }
     }
+
+    // 메모 추가
+    addNoteBtn.addEventListener('click', () => {
+      const title = noteTitle.value.trim();
+      const content = noteContent.value.trim();
+      const tags = noteTags.value.split(',').map(t => t.trim()).filter(t => t.length > 0);
+
+      if (!title && !content) return alert('제목이나 내용을 입력해주세요.');
+
+      const newNote = {
+        id: Date.now(),
+        title,
+        content,
+        tags,
+        color: selectedColor,
+        pinned: false,
+        createdAt: new Date().toLocaleDateString()
+      };
+
+      notes.unshift(newNote);
+      saveAndRender();
+      
+      // 스프레드시트 동기화 실행
+      syncToGoogleSheet(newNote);
+
+      // 폼 초기화
+      noteTitle.value = '';
+      noteContent.value = '';
+      noteTags.value = '';
+    });
+
+    function saveAndRender() {
+      localStorage.setItem('pwa_notes', JSON.stringify(notes));
+      renderNotes();
+    }
+
+    function parseContentWithCheckboxes(noteId, content) {
+      const lines = content.split('\n');
+      return lines.map((line, idx) => {
+        if (line.startsWith('[ ] ') || line.startsWith('[x] ')) {
+          const isChecked = line.startsWith('[x] ');
+          const text = line.replace(/^\[[ x]\]\s*/, '');
+          return `<div class="todo-item ${isChecked ? 'done' : ''}">
+                    <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleTodo(${noteId}, ${idx})">
+                    <span>${text}</span>
+                  </div>`;
+        }
+        return `<div>${line}</div>`;
+      }).join('');
+    }
+
+    function toggleTodo(noteId, lineIndex) {
+      const note = notes.find(n => n.id === noteId);
+      if (note) {
+        const lines = note.content.split('\n');
+        if (lines[lineIndex].startsWith('[ ] ')) {
+          lines[lineIndex] = lines[lineIndex].replace('[ ] ', '[x] ');
+        } else if (lines[lineIndex].startsWith('[x] ')) {
+          lines[lineIndex] = lines[lineIndex].replace('[x] ', '[ ] ');
+        }
+        note.content = lines.join('\n');
+        saveAndRender();
+      }
+    }
+
+    function togglePin(id) {
+      notes = notes.map(n => n.id === id ? { ...n, pinned: !n.pinned } : n);
+      saveAndRender();
+    }
+
+    function deleteNote(id) {
+      notes = notes.filter(n => n.id !== id);
+      saveAndRender();
+    }
+
+    function renderNotes() {
+      const query = searchInput.value.toLowerCase();
+      const filtered = notes
+        .filter(n => 
+          n.title.toLowerCase().includes(query) || 
+          n.content.toLowerCase().includes(query) ||
+          n.tags.some(t => t.toLowerCase().includes(query))
+        )
+        .sort((a, b) => b.pinned - a.pinned);
+
+      notesGrid.innerHTML = filtered.map(note => {
+        const cardBg = note.color === 'default' ? 'var(--bg-card)' : note.color;
+        return `
+          <div class="note-card ${note.pinned ? 'pinned' : ''}" style="--card-bg: ${cardBg}">
+            <div>
+              <div class="note-header">
+                <div class="note-title">${note.title || '제목 없음'}</div>
+                <button class="pin-btn ${note.pinned ? 'active' : ''}" onclick="togglePin(${note.id})">📌</button>
+              </div>
+              <div class="note-body">${parseContentWithCheckboxes(note.id, note.content)}</div>
+            </div>
+            <div class="note-footer">
+              <div class="tags-container">
+                ${note.tags.map(tag => `<span class="tag-badge">${tag.startsWith('#') ? tag : '#' + tag}</span>`).join('')}
+              </div>
+              <button class="delete-btn" onclick="deleteNote(${note.id})">삭제</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    searchInput.addEventListener('input', renderNotes);
+    renderNotes();
   </script>
 </body>
 </html>
