@@ -223,7 +223,7 @@
       }
     });
 
-    // 🌐 구글 스프레드시트 전체 데이터 불러오기
+    // 🌐 구글 스프레드시트 전체 데이터 불러오기 (예외 처리 강화)
     async function loadFromGoogleSheet() {
       if (!GAS_URL) return;
 
@@ -234,30 +234,36 @@
         const data = await res.json();
 
         if (Array.isArray(data) && data.length > 0) {
-          notes = data.map((item) => {
-            const rawText = item.memo || '';
+          notes = data.map((item, idx) => {
+            const rawText = String(item.memo || '');
             
             let title = '';
             let tags = [];
             let content = rawText;
 
+            // [제목] 패턴 추출
             const titleMatch = rawText.match(/\[제목\]\s*(.*?)(?=\n|$)/);
             if (titleMatch) title = titleMatch[1].trim();
 
+            // [태그] 패턴 추출
             const tagMatch = rawText.match(/\[태그\]\s*(.*?)(?=\n|$)/);
             if (tagMatch && tagMatch[1]) {
               tags = tagMatch[1].split(',').map(t => t.trim()).filter(Boolean);
             }
 
+            // [내용] 패턴 추출
             const contentMatch = rawText.match(/\[내용\]\n([\s\S]*)/);
             if (contentMatch) {
               content = contentMatch[1];
+            } else if (titleMatch) {
+              // [내용] 태그가 없더라도 [제목] 구문 제거 후 본문으로 사용
+              content = rawText.replace(/\[제목\]\s*.*?\n?/, '').replace(/\[태그\]\s*.*?\n?/, '').trim();
             }
 
             return {
-              id: item.id || Date.now(),
-              title: title,
-              content: content,
+              id: item.id || (Date.now() + idx),
+              title: title || '메모',
+              content: content || rawText,
               tags: tags,
               color: 'default',
               pinned: false,
@@ -272,7 +278,7 @@
         }
       } catch (err) {
         console.error('GAS Load Error:', err);
-        syncStatus.textContent = '⚠️ 시트 동기화 실패 (로컬 데이터 표시)';
+        syncStatus.textContent = '⚠️ 시트 동기화 실패';
       } finally {
         setTimeout(() => syncStatus.textContent = '', 3000);
       }
